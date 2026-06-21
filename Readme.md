@@ -55,7 +55,7 @@ ai-agent/
 
 ```bash
 For windows:
-git clone https://github.com/faioperation/Roberto-Ai-Chatbot-Tareq/
+git clone https://github.com/faioperation/Roberto-Ai-Chatbot-Tareq.git
 cd ai-agent
 notepad .env
 ```
