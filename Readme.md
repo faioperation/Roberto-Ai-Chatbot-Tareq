@@ -141,7 +141,7 @@ docker-compose up -d --build
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/agent/message` | Receives incoming messages from Roberto |
+| POST | `/api/agent/message` | Receives incoming messages from backend |
 | POST | `/api/agent/handoff` | Pause or resume AI for a conversation  |
 | POST | `/api/summary/run`   | Manually trigger the summary job  |
 | GET | `/api/summary/status` | Check conversations currently in memory  |
