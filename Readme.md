@@ -165,7 +165,7 @@ Agent automatically decides the category from the conversation:
 
 | Category | Use case |
 |----------|----------|
-| `PARCEL_DELIVERY` | Physical parcel shipment |
+| `CARGO_DELIVERY` | Physical parcel shipment |
 | `APPOINTMENT_BOOKING` | Meeting / consultation / session |
 | `ORDER_BOOKING` | Product / sales order |
 
