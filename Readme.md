@@ -63,7 +63,7 @@ notepad .env
 ```bash
 For server deployment:
 git clone https://github.com/faioperation/Roberto-Ai-Chatbot-Tareq.git
-cd Roberto-Ai-Chatbot-Tareq/ai-agentConfigure Environment Variables
+cd Roberto-Ai-Chatbot-Tareq/ai-agent
 touch .env
 nano .env
 ```
