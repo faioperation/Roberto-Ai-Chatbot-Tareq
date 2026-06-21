@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+langgraph
+langchain-openai
+langchain-core
+pinecone
+PyMuPDF
+openai
+python-dotenv
+httpx
+pydantic

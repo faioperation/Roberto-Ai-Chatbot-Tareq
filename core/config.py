@@ -1,0 +1,12 @@
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
+ROBERTO_API_BASE = os.getenv("ROBERTO_API_BASE")
+ROBERTO_API_BASE_PUBLIC = os.getenv("ROBERTO_API_BASE_PUBLIC")
+ROBERTO_API_TOKEN = os.getenv("ROBERTO_API_TOKEN")
+AGENT_API_TOKEN = os.getenv("AGENT_API_TOKEN")
