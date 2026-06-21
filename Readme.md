@@ -73,11 +73,11 @@ AGENT_API_TOKEN=
 ### 2. Run locally
 
 ```bash
-python -m venv venv
-Linux: source venv/bin/activate
-Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python main.py
+- python -m venv venv
+- Linux: source venv/bin/activate
+- Windows: venv\Scripts\activate
+- pip install -r requirements.txt
+- python main.py
 ```
 
 Server starts at `http://0.0.0.0:8005`
