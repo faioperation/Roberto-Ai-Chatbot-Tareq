@@ -54,9 +54,18 @@ ai-agent/
 ### 1. Clone & create `.env`
 
 ```bash
-git clone <your-repo>
+For windows:
+git clone https://github.com/faioperation/Roberto-Ai-Chatbot-Tareq/
 cd ai-agent
-cp .env.example .env   # then fill in your keys
+notepad .env
+```
+
+```bash
+For server deployment:
+git clone https://github.com/faioperation/Roberto-Ai-Chatbot-Tareq.git
+cd Roberto-Ai-Chatbot-Tareq/ai-agentConfigure Environment Variables
+touch .env
+nano .env
 ```
 
 `.env` required keys:
