@@ -2,7 +2,8 @@ def build_prompt(
     subject: str,
     business_profile: dict = None,
     training_config: dict = None,
-    context: str = None
+    context: str = None,
+    active_campaigns: list = None
 ) -> str:
     """
     Builds the system prompt for the agent.
@@ -193,6 +194,26 @@ Business Information:
     # ── Pinecone RAG context (fallback when no training config) ────────
     if context:
         prompt += f"\n\nRelevant Knowledge:\n{context}"
+
+    # ── Active Campaigns (session memory) ────────────────────────────
+    # Only active (isExpire=False) campaigns are injected.
+    # Agent never proactively mentions them — only responds if customer asks.
+    if active_campaigns:
+        prompt += "\n\nACTIVE CAMPAIGNS (for your knowledge only):\n"
+        prompt += "- Do NOT proactively mention these campaigns unless the customer asks.\n"
+        prompt += "- If a customer asks about current campaigns, offers, or discounts,\n"
+        prompt += "  share ONLY the campaigns listed here (these are the active ones).\n"
+        prompt += "- Never mention expired campaigns.\n\n"
+        for i, campaign in enumerate(active_campaigns, 1):
+            prompt += f"Campaign {i}:\n"
+            prompt += f"  Title: {campaign.get('title', 'N/A')}\n"
+            prompt += f"  Message: {campaign.get('message', 'N/A')}\n"
+            if campaign.get('endDate'):
+                prompt += f"  Valid Until: {campaign.get('endDate')}\n"
+            prompt += "\n"
+    else:
+        prompt += "\n\nACTIVE CAMPAIGNS: None currently active.\n"
+        prompt += "If customer asks about campaigns or offers, say there are no active campaigns at the moment.\n"
 
     # ── General rules ─────────────────────────────────────────────────
     prompt += """

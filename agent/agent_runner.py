@@ -22,13 +22,10 @@ llm = ChatOpenAI(
     temperature=0.7
 )
 
-# Caches with TTL. Because business training / pricing data is dynamic and can
-# be updated by the admin at any time, we expire cached entries after TTL so the
-# agent picks up changes without needing a restart.
 CACHE_TTL_SECONDS = 300  # 5 minutes
 
-_business_cache = {}   # business_id -> (timestamp, data)
-_training_cache = {}   # business_id -> (timestamp, data)
+_business_cache = {}
+_training_cache = {}
 
 
 def _cache_get(cache: dict, key: str):
@@ -58,13 +55,23 @@ def _business_candidates(business_id: str):
 
 
 def _training_candidates(business_id: str):
-    # Documented: {base_with_v1}/public/agent-training/{business_id}
     return build_candidates(
         bases=[ROBERTO_API_BASE_PUBLIC, ROBERTO_API_BASE],
         suffixes=[
             f"/public/agent-training/{business_id}",
             f"/v1/public/agent-training/{business_id}",
             f"/agent-training/{business_id}",
+        ],
+    )
+
+
+def _campaign_candidates(branch_id: str):
+    return build_candidates(
+        bases=[ROBERTO_API_BASE_PUBLIC, ROBERTO_API_BASE],
+        suffixes=[
+            f"/public/campaigns/{branch_id}",
+            f"/v1/public/campaigns/{branch_id}",
+            f"/campaigns/{branch_id}",
         ],
     )
 
@@ -142,6 +149,37 @@ async def fetch_training_data(business_id: str) -> dict:
     return {}
 
 
+async def fetch_campaigns(branch_id: str) -> list:
+    # Campaign is session memory — no cache, always fresh
+    if not branch_id:
+        return []
+
+    try:
+        resp = await get_with_fallback(
+            candidates=_campaign_candidates(branch_id),
+            headers={
+                "x-api-token": ROBERTO_API_TOKEN,
+                "Content-Type": "application/json",
+            },
+            log_tag="FETCH CAMPAIGN",
+        )
+
+        if resp is not None and resp.status_code == 200:
+            payload = resp.json()
+            all_campaigns = payload.get("data", [])
+
+            # Only keep active (non-expired) campaigns
+            active = [c for c in all_campaigns if c.get("isExpire") is False]
+
+            print(f"[FETCH CAMPAIGN] Total: {len(all_campaigns)} | Active: {len(active)}")
+            return active
+
+    except Exception as e:
+        print(f"[FETCH CAMPAIGN ERROR] {e}")
+
+    return []
+
+
 async def run_agent(
     business_id: str,
     training_data_id: str,
@@ -156,10 +194,13 @@ async def run_agent(
     business_data = await fetch_business(business_id)
     business_profile = business_data.get("profile", None)
 
-    # ── Step 2: Fetch training config using business_id ──────────────
+    # ── Step 2: Fetch training config ────────────────────────────────
     training_config = await fetch_training_data(business_id)
 
-    # ── Step 3: Decide knowledge source ──────────────────────────────
+    # ── Step 3: Fetch active campaigns (session memory) ──────────────
+    active_campaigns = await fetch_campaigns(branch_id)
+
+    # ── Step 4: Decide knowledge source ──────────────────────────────
     context = None
     if training_config:
         print(f"[KNOWLEDGE SOURCE] Using business training config")
@@ -167,39 +208,37 @@ async def run_agent(
         context = await retrieve(message, subject)
         print(f"[KNOWLEDGE SOURCE] Using Pinecone base-{subject}")
 
-    # ── Step 4: Build system prompt ───────────────────────────────────
+    # ── Step 5: Build system prompt ───────────────────────────────────
     system_prompt = build_prompt(
         subject=subject,
         business_profile=business_profile,
         training_config=training_config if training_config else None,
-        context=context
+        context=context,
+        active_campaigns=active_campaigns
     )
 
     # Always inject actual business_id so agent never guesses it
-    # This prevents agent from making up wrong business IDs
     system_prompt += f"\n\nCRITICAL: The business_id for this conversation is: {business_id}"
     system_prompt += f"\nAlways use this exact business_id when calling collect_lead or create_booking tools."
     system_prompt += f"\nNever use any other business_id or make one up."
 
-    # Inject branch_id if available — prevents agent from guessing or skipping it
+    # Inject branch_id if available
     if branch_id:
         system_prompt += f"\n\nCRITICAL: The branch_id for this conversation is: {branch_id}"
         system_prompt += f"\nAlways pass this exact branch_id when calling collect_lead or create_booking tools."
     else:
         system_prompt += f"\n\nNote: No branch_id is available for this conversation. Do not pass a branch_id to collect_lead or create_booking tools."
 
-    # ── Step 5: Load conversation history ────────────────────────────
+    # ── Step 6: Load conversation history ────────────────────────────
     history = get_history(business_id, recipient_id)
 
-    # ── Step 6: Build messages with history ──────────────────────────
+    # ── Step 7: Build messages with history ──────────────────────────
     all_messages = []
     for h in history:
         all_messages.append(h)
     all_messages.append({"role": "user", "content": message})
 
-    # ── Step 7: Run LangGraph ReAct agent ────────────────────────────
-    # branch_id is bound directly into the tools at creation time —
-    # the LLM never has to pass it itself, so it can never be dropped
+    # ── Step 8: Run LangGraph ReAct agent ────────────────────────────
     tools = get_all_tools(business_id=business_id, branch_id=branch_id)
 
     agent = create_react_agent(
@@ -209,10 +248,10 @@ async def run_agent(
     )
     result = await agent.ainvoke({"messages": all_messages})
 
-    # ── Step 8: Extract final response ───────────────────────────────
+    # ── Step 9: Extract final response ───────────────────────────────
     ai_response = result["messages"][-1].content
 
-    # ── Step 9: Log for testing ───────────────────────────────────────
+    # ── Step 10: Log for testing ──────────────────────────────────────
     print(f"\n{'='*50}")
     print(f"Business ID  : {business_id}")
     print(f"Branch ID    : {branch_id}")
@@ -223,24 +262,20 @@ async def run_agent(
     print(f"AI Response  : {ai_response}")
     print(f"{'='*50}\n")
 
-    # ── Step 10: Save to memory ───────────────────────────────────────
+    # ── Step 11: Save to memory ───────────────────────────────────────
     save_message(business_id, recipient_id, "user", message)
     save_message(business_id, recipient_id, "assistant", ai_response)
 
-    # ── Step 11: Save conversation_id ────────────────────────────────
+    # ── Step 12: Save conversation_id ────────────────────────────────
     if conversation_id:
         save_conversation_id(business_id, recipient_id, conversation_id)
 
-    # ── Step 12: Send response to correct channel ─────────────────────
-    # Re-check pause state — it may have changed while the agent was
-    # processing (e.g. a human agent took over mid-conversation).
-    # Import here to avoid circular imports at module level.
+    # ── Step 13: Send response to correct channel ─────────────────────
+    # Re-check pause state — it may have changed while the agent was processing
     from webhooks.incoming import paused_conversations as _paused
     _pause_key = f"{business_id}:{recipient_id}"
     if _pause_key in _paused:
-        print(f"[HANDOFF] AI paused mid-processing for {_pause_key} — response suppressed, not sent to channel")
-        # Still return the response so the API caller gets it,
-        # but we do NOT send it to the customer's channel.
+        print(f"[HANDOFF] AI paused mid-processing for {_pause_key} — response suppressed")
         return ai_response
 
     await send_response(
@@ -252,5 +287,5 @@ async def run_agent(
         branch_id=branch_id
     )
 
-    # ── Step 13: Return response ──────────────────────────────────────
+    # ── Step 14: Return response ──────────────────────────────────────
     return ai_response

@@ -6,48 +6,62 @@ def build_summary_prompt(messages: list, subject: str, business_id: str) -> str:
         content = msg.get("content", "")
         conversation_text += f"{role}: {content}\n"
 
-    prompt = f"""
-You are a conversation analyst. Analyze the following conversation and extract structured information.
+    subject_label = (subject or "general").strip()
 
-Subject: {subject}
+    prompt = f"""
+You are a conversation analyst for a multi-tenant business assistant. Analyze the
+conversation below and extract structured information.
+
+Business area (subject): {subject_label}
 Business ID: {business_id}
 
 Conversation:
 {conversation_text}
 
-Extract the following information and respond ONLY in valid JSON format with no extra text:
+Extract the following and respond ONLY in valid JSON (no markdown, no backticks,
+no extra text). Some fields (pickup_area, destination, weight) only apply to
+parcel/cargo shipping — if this conversation is NOT about shipping a parcel, set
+them to "Not specified". Do not invent values.
 
 {{
-  "items": "what items/products customer wants to ship or inquire about, or 'Not specified'",
-  "pickup_area": "pickup location mentioned by customer, or 'Not specified'",
-  "destination": "destination country or city, or 'Not specified'",
-  "weight": "weight of items if mentioned, or 'Not specified'",
-  "pickup_date_time": "pickup date and time if mentioned, or 'Not specified'",
+  "items": "what product/service/item the customer wants, or 'Not specified'",
+  "pickup_area": "pickup location (parcel/cargo only), or 'Not specified'",
+  "destination": "destination (parcel/cargo only), or 'Not specified'",
+  "weight": "weight (parcel/cargo only), or 'Not specified'",
+  "pickup_date_time": "relevant date/time (pickup, appointment, or delivery) if mentioned, or 'Not specified'",
   "current_status": "one of: Inquiry, Price Quoted, Details Collected, Booking Confirmed, Escalated to Human, Closed",
-  "recent_summary": "one sentence summary of the most recent part of conversation",
+  "recent_summary": "one sentence summary of the most recent part of the conversation",
   "booking_info": {{
     "booked": true or false,
-    "reference": "booking reference if available or null",
-    "price": total price as number or null
+    "reference": "booking reference if available, else null",
+    "price": total price as a number, else null
   }},
-  "summary": "2-3 sentence overview of the entire conversation",
-  "key_points": [
-    "key point 1",
-    "key point 2",
-    "key point 3"
-  ],
+  "summary": "2-3 sentence overview of the whole conversation",
+  "key_points": ["key point 1", "key point 2", "key point 3"],
   "customer_intent": {{
     "intent": "cold or warm or hot",
     "confidence": "low or medium or high",
-    "reason": "one sentence explaining why this intent was assigned"
+    "reason": "one sentence explaining the intent"
   }}
 }}
 
-Intent definitions:
-- cold: Customer is just browsing or asking general questions with no commitment
-- warm: Customer is interested, asking about pricing or specific details but not confirmed
-- hot: Customer confirmed booking or provided all required details ready to book
+INTENT RULES — read carefully and be conservative. Default to the LOWER intent
+when unsure. Most conversations are cold or warm; "hot" must be earned.
+- cold: greetings, vague/general questions, just browsing, no specific item or
+  details given yet, or only one short message. If in doubt, it is cold.
+- warm: customer named a specific product/service AND is actively asking about
+  price or details, but has NOT confirmed and has NOT given full contact +
+  booking details.
+- hot: ONLY if the customer EXPLICITLY confirmed a booking/order/appointment
+  ("yes book it", "confirm", "proceed"), OR has provided ALL required details
+  AND clearly signalled they want to proceed now. A price quote alone is NOT hot
+  — that is warm. Interest alone is NOT hot.
 
-Respond with ONLY the JSON object. No explanation, no markdown, no backticks.
+If booking_info.booked is false, the intent is almost never "hot" unless the
+customer literally just said to confirm. Match current_status with intent:
+"Booking Confirmed" -> hot; "Price Quoted"/"Details Collected" -> usually warm;
+"Inquiry" -> usually cold.
+
+Respond with ONLY the JSON object.
 """
     return prompt
