@@ -4,9 +4,6 @@ from core.config import ROBERTO_API_BASE, ROBERTO_API_BASE_PUBLIC, ROBERTO_API_T
 from agent.tools.http_fallback import build_candidates, post_with_fallback
 
 
-# Candidate paths for lead creation. Documentation says /api/leads/create, but
-# we also try public-base variants in case it's mounted differently.
-# Order matters: most-likely-correct first.
 def _lead_candidates():
     return build_candidates(
         bases=[ROBERTO_API_BASE, ROBERTO_API_BASE_PUBLIC],
@@ -18,7 +15,15 @@ def _lead_candidates():
     )
 
 
-def make_collect_lead(branch_id: str = None):
+# Channel → source mapping
+CHANNEL_SOURCE_MAP = {
+    "whatsapp": "WHATSAPP",
+    "facebook": "MESSENGER",
+    "instagram": "INSTAGRAM",
+}
+
+
+def make_collect_lead(branch_id: str = None, channel: str = None):
 
     @tool
     async def collect_lead(
@@ -57,13 +62,16 @@ def make_collect_lead(branch_id: str = None):
            "preferredLanguage": "English"}.
           Only include what the customer actually told you - never invent values.
         """
+        # Channel থেকে source map করো — code-এ inject, LLM থেকে না
+        source = CHANNEL_SOURCE_MAP.get((channel or "").lower(), "WHATSAPP")
+
         # --- Required + standard named fields ---
         payload = {
             "businessId": business_id,
             "name": name,
             "phone": phone,
             "note": inquiry,
-            "source": "SOCIAL_MEDIA",
+            "source": source,
             "status": (status or "warm").lower(),
         }
 

@@ -150,7 +150,6 @@ async def fetch_training_data(business_id: str) -> dict:
 
 
 async def fetch_campaigns(branch_id: str) -> list:
-    # Campaign is session memory — no cache, always fresh
     if not branch_id:
         return []
 
@@ -239,7 +238,8 @@ async def run_agent(
     all_messages.append({"role": "user", "content": message})
 
     # ── Step 8: Run LangGraph ReAct agent ────────────────────────────
-    tools = get_all_tools(business_id=business_id, branch_id=branch_id)
+    # channel is passed so collect_lead can map it to the correct source
+    tools = get_all_tools(business_id=business_id, branch_id=branch_id, channel=channel)
 
     agent = create_react_agent(
         llm,
